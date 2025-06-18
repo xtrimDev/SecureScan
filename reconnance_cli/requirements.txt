@@ -1,5 +1,0 @@
-requests
-dnspython
-regex
-rich
-Flask

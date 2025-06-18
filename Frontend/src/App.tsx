@@ -162,52 +162,7 @@ function App() {
               SecurityScanner
             </h1>
           </div>
-
-          {/* Desktop Menu */}
-          <nav className="hidden md:flex space-x-6 text-gray-700 font-medium">
-            <a href="#about" className="hover:text-indigo-600">
-              About Us
-            </a>
-            <a href="#features" className="hover:text-indigo-600">
-              Features
-            </a>
-            <a href="#contact" className="hover:text-indigo-600">
-              Contact
-            </a>
-          </nav>
-
-          {/* Mobile Menu Toggle */}
-          <button
-            onClick={() => setIsOpen(!isOpen)}
-            className="md:hidden text-gray-700"
-          >
-            {isOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-          </button>
         </div>
-
-        {/* Mobile Menu */}
-        {isOpen && (
-          <div className="md:hidden px-4 pb-4 space-y-2">
-            <a
-              href="#about"
-              className="block text-gray-700 hover:text-indigo-600"
-            >
-              About Us
-            </a>
-            <a
-              href="#features"
-              className="block text-gray-700 hover:text-indigo-600"
-            >
-              Features
-            </a>
-            <a
-              href="#contact"
-              className="block text-gray-700 hover:text-indigo-600"
-            >
-              Contact
-            </a>
-          </div>
-        )}
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
