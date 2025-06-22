@@ -91,6 +91,10 @@ function App() {
   
     setIsUrlFilled(true);
 
+    if (url == scannedUrl && scanResults) {
+      return;
+    }
+
     (termsAccepted) ? handleScan() : setIsModalOpen(true);
   };
   
@@ -108,11 +112,11 @@ function App() {
 
   const handleScan = async () => {
     setScannedUrl(url);
+    setXssLogs([]);
+    setSqlLogs([]);
 
     setIsModalOpen(false);
 
-    setScanResults(mockScanResults.reconnaissance);
-    return;
     setIsScanning(true);
 
     const backendUrl = import.meta.env.VITE_BACKEND_URL;
@@ -151,9 +155,16 @@ function App() {
   const [sqlLogs, setSqlLogs] = useState<string[]>([]);
   const [isXsstrikeLoading, setIsXsstrikeLoading] = useState<boolean>(false);
   const [isSqlmapLoading, setIsSqlmapLoading] = useState<boolean>(false);
+  const [xssSummary, setXssSummary] = useState<string | null>(null);
+  const [sqlSummary, setSqlSummary] = useState<string | null>(null);
+  const [isXssSummarizing, setIsXssSummarizing] = useState(false);
+  const [isSqlSummarizing, setIsSqlSummarizing] = useState(false);
 
   useEffect(() => {
-    ws.current = new WebSocket("ws://localhost:8000/ws/ping");
+    const socketUrl = import.meta.env.VITE_SOCKET_URL;
+    console.log(socketUrl);
+
+    ws.current = new WebSocket(`${socketUrl}/ws/ping`);
 
     ws.current.onmessage = (event: MessageEvent) => {
       const data = event.data as string;
@@ -184,14 +195,14 @@ function App() {
   }, []);
 
   const startXss = () => {
+    if (isXsstrikeLoading || isSqlmapLoading) return;
     if (!ws.current || ws.current.readyState !== WebSocket.OPEN) {
       setXssLogs(["WebSocket not connected."]);
       return;
     }
     setIsXsstrikeLoading(true);
     setXssLogs([]);
-    ws.current.send(`xss:${url}`);
-    // Stop loading when scan completed message is received
+    ws.current.send(`xss:${scannedUrl}`);
     const stopLoading = (event: MessageEvent) => {
       if (event.data.startsWith("xss:XSStrike scan completed.")) {
         setIsXsstrikeLoading(false);
@@ -202,14 +213,14 @@ function App() {
   };
 
   const startSql = () => {
+    if (isXsstrikeLoading || isSqlmapLoading) return;
     if (!ws.current || ws.current.readyState !== WebSocket.OPEN) {
       setSqlLogs(["WebSocket not connected."]);
       return;
     }
     setIsSqlmapLoading(true);
     setSqlLogs([]);
-    ws.current.send(`sql:${url}`);
-    // Stop loading when scan completed message is received
+    ws.current.send(`sql:${scannedUrl}`);
     const stopLoading = (event: MessageEvent) => {
       if (event.data.startsWith("sql:sqlmap scan completed.")) {
         setIsSqlmapLoading(false);
@@ -217,6 +228,29 @@ function App() {
       }
     };
     ws.current.addEventListener('message', stopLoading);
+  };
+
+  const summarizeLog = async (log: string[], type: 'xss' | 'sql') => {
+    if (!log.length) return;
+    const backendUrl = import.meta.env.VITE_BACKEND_URL;
+    if (type === 'xss') setIsXssSummarizing(true);
+    if (type === 'sql') setIsSqlSummarizing(true);
+    try {
+      const res = await fetch(`${backendUrl}/api/summarize`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ log: log.join('\n'), type }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Failed to summarize.');
+      if (type === 'xss') setXssSummary(data.summary);
+      if (type === 'sql') setSqlSummary(data.summary);
+    } catch (err: any) {
+      if (type === 'xss') setXssSummary('Error summarizing log.');
+      if (type === 'sql') setSqlSummary('Error summarizing log.');
+    }
+    if (type === 'xss') setIsXssSummarizing(false);
+    if (type === 'sql') setIsSqlSummarizing(false);
   };
 
   return (
@@ -701,14 +735,32 @@ function App() {
                   <button
                     className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:bg-indigo-300 disabled:cursor-not-allowed mb-4"
                     onClick={startXss}
-                    disabled={isXsstrikeLoading}
+                    disabled={isXsstrikeLoading || isSqlmapLoading || isXssSummarizing}
                   >
                     {isXsstrikeLoading ? 'Scanning with XSStrike...' : 'Run XSStrike XSS Scan'}
                   </button>
-                  <div className="bg-gray-100 p-4 rounded shadow h-96 overflow-auto">
-                    {xssLogs.map((log, index) => (
-                      <div key={index} className="text-sm">{log}</div>
-                    ))}
+                  <button
+                    className="mb-2 ml-2 px-3 py-1 bg-gray-800 text-white rounded hover:bg-gray-700 disabled:bg-gray-400 text-xs"
+                    onClick={() => summarizeLog(xssLogs, 'xss')}
+                    disabled={isXssSummarizing || isXsstrikeLoading || xssLogs.length === 0}
+                  >
+                    {isXssSummarizing ? 'Summarizing...' : 'Summarize Output'}
+                  </button>
+                  {xssSummary && (
+                    <div className="bg-white text-gray-900 rounded p-4 mb-2 font-sans text-base border-2 border-yellow-400 shadow max-h-80 overflow-auto" style={{lineHeight: '1.7'}}>
+                      <div className="mb-2 text-xs text-yellow-700 font-bold tracking-wide">Summary</div>
+                      <div dangerouslySetInnerHTML={{ __html: xssSummary }} />
+                    </div>
+                  )}
+                  <div className="bg-[#18181b] border border-gray-800 rounded-lg shadow-inner p-4 h-96 overflow-auto font-mono text-sm text-green-400">
+                    <div className="mb-2 text-xs text-gray-400 font-bold tracking-wide">XSS Console Output</div>
+                    {xssLogs.length === 0 ? (
+                      <div className="text-gray-500">No output yet.</div>
+                    ) : (
+                      xssLogs.map((log, index) => (
+                        <div key={index} className="whitespace-pre-wrap leading-relaxed">{log}</div>
+                      ))
+                    )}
                   </div>
                 </div>
                 <div className="mt-8">
@@ -718,14 +770,32 @@ function App() {
                   <button
                     className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:bg-indigo-300 disabled:cursor-not-allowed mb-4"
                     onClick={startSql}
-                    disabled={isSqlmapLoading}
+                    disabled={isSqlmapLoading || isXsstrikeLoading || isSqlSummarizing}
                   >
                     {isSqlmapLoading ? 'Scanning with sqlmap...' : 'Run SQL Injection Scan'}
                   </button>
-                  <div className="bg-gray-100 p-4 rounded shadow h-96 overflow-auto">
-                    {sqlLogs.map((log, index) => (
-                      <div key={index} className="text-sm">{log}</div>
-                    ))}
+                  <button
+                    className="mb-2 ml-2 px-3 py-1 bg-gray-800 text-white rounded hover:bg-gray-700 disabled:bg-gray-400 text-xs"
+                    onClick={() => summarizeLog(sqlLogs, 'sql')}
+                    disabled={isSqlSummarizing || isSqlmapLoading || sqlLogs.length === 0}
+                  >
+                    {isSqlSummarizing ? 'Summarizing...' : 'Summarize Output'}
+                  </button>
+                  {sqlSummary && (
+                    <div className="bg-white text-gray-900 rounded p-4 mb-2 font-sans text-base border-2 border-yellow-400 shadow max-h-80 overflow-auto" style={{lineHeight: '1.7'}}>
+                      <div className="mb-2 text-xs text-yellow-700 font-bold tracking-wide">Summary</div>
+                      <div dangerouslySetInnerHTML={{ __html: sqlSummary }} />
+                    </div>
+                  )}
+                  <div className="bg-[#18181b] border border-gray-800 rounded-lg shadow-inner p-4 h-96 overflow-auto font-mono text-sm text-blue-300">
+                    <div className="mb-2 text-xs text-gray-400 font-bold tracking-wide">SQLMap Console Output</div>
+                    {sqlLogs.length === 0 ? (
+                      <div className="text-gray-500">No output yet.</div>
+                    ) : (
+                      sqlLogs.map((log, index) => (
+                        <div key={index} className="whitespace-pre-wrap leading-relaxed">{log}</div>
+                      ))
+                    )}
                   </div>
                 </div>
               </div>

@@ -16,6 +16,7 @@ import subprocess
 
 from dotenv import load_dotenv
 import os
+import requests as pyrequests
 load_dotenv()
 
 App = Flask(__name__)
@@ -76,6 +77,7 @@ def gather_reconnaissance(url):
                 "OS": os,
                 "webServerType": server,
                 "cms": cms or "Not detected",
+                "hostingProvider": whois_data.get("hostingProvider", "Unknown")
             },
             "openPorts": ports_data,
             "dnsRecords": dns_records,
@@ -103,6 +105,41 @@ def get_reconnaissance():
     
     result, status_code = gather_reconnaissance(url)
     return jsonify(result), status_code
+
+@App.route('/api/summarize', methods=["POST"])
+def summarize_log():
+    data = request.get_json()
+    log = data.get('log', '')
+    scan_type = data.get('type', '')
+    if not log or scan_type not in ("xss", "sql"):
+        return jsonify({"error": "Invalid input."}), 400
+    gemini_api_key = os.getenv('GEMINI_API_KEY')
+    if not gemini_api_key:
+        return jsonify({"error": "Gemini API key not set in environment."}), 500
+    try:
+        # Gemini API endpoint for text summarization (using 2.0-flash, matching curl example)
+        endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={gemini_api_key}"
+        headers = {"Content-Type": "application/json"}
+        prompt = f"Summarize the following {scan_type.upper()} scan log in a concise, human-readable way, highlighting key findings, vulnerabilities, and important events.\n\nReturn the summary as well-structured, styled HTML suitable for direct display in a web UI. Use clear sections, headings, and lists where appropriate for easy reading.\n\nLog:\n{log}"
+        payload = {
+            "contents": [
+                {
+                    "parts": [
+                        {"text": prompt}
+                    ]
+                }
+            ]
+        }
+        response = pyrequests.post(endpoint, json=payload, headers=headers, timeout=60)
+        if response.status_code != 200:
+            return jsonify({"error": f"Gemini API error: {response.text}"}), 500
+        data = response.json()
+        summary = data.get('candidates', [{}])[0].get('content', {}).get('parts', [{}])[0].get('text', '')
+        if not summary:
+            summary = "No summary returned by Gemini."
+        return jsonify({"summary": summary})
+    except Exception as e:
+        return jsonify({"error": f"Gemini summarization failed: {str(e)}"}), 500
 
 if __name__ == "__main__":
     App.run(debug=False)
