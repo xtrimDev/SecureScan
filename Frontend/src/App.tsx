@@ -1,112 +1,17 @@
-import React, { useState } from "react";
-import {
-  Shield,
-  Menu,
-  Bot,
-  X,
-  Server,
-  HdmiPort,
-  Lock,
-  Globe,
-  Network,
-  ChevronDown,
-  FileText,
-  ChevronUp,
-  Loader2,
-} from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { Shield, Bot, Server, HdmiPort, Lock, Globe, Network, ChevronDown, FileText, ChevronUp, Loader2 } from "lucide-react";
+import { toast } from 'react-toastify';
 
 function App() {
-  const mockScanResults = {
-  reconnaissance: {
-    serverInfo: {
-      ip: "Unknown",
-      OS: "Unknown",
-      webServerType: "Unknown",
-      cms: "Wordpress",
-    },
-    openPorts: [
-      { port: 0, service: "HTTP", status: "Open"},
-    ],
-    dnsRecords: [
-      {
-        type: "A",
-        data: "-",
-      },
-      {
-        type: "AAAA",
-        data: "-",
-      },
-      {
-        type: "TXT",
-        data: "-",
-      },
-      {
-        type: "MX",
-        data: "-",
-      },
-      {
-        type: "CNAME",
-        data: "-",
-      },
-      {
-        type: "NS",
-        data: "-",
-      }
-    ],
-
-    subdomains: ["abc.example.com", "def.example.com", "ghi.example.com"],
-
-    securityHeaders: [
-      { name: "Content-Security-Policy", present: false, risk: "high" },
-      { name: "X-XSS-Protection", present: true, risk: "low" },
-      { name: "X-Frame-Options", present: true, risk: "low" },
-      { name: "Strict-Transport-Security", present: false, risk: "medium" },
-    ],
-
-    robotsTxt:
-      "User-agent: *\nDisallow: /admin\nDisallow: /private\n\nUser-agent: Googlebot\nAllow: /public",
-
-    "whois": {
-      "domain": "example.com",
-      "registrar": "NameCheap, Inc.",
-      "creationDate": "2010-06-15",
-      "expiryDate": "2030-06-15",
-      "nameServers": ["ns1.example.com", "ns2.example.com"]
-    },
-    "ssl": {
-      "issuer": "Let's Encrypt Authority X3",
-      "validFrom": "2024-04-10",
-      "validTo": "2024-07-09",
-      "protocol": "TLS 1.3",
-      "keySize": "2048 bits",
-      "status": "Valid"
-    }
-  },
-  vulnerabilities: [
-    {
-    "name": "",
-      "description": "",
-      "risk": "",
-    }, {
-    "name": "",
-      "description": "",
-      "risk": "",
-    }, {
-    "name": "",
-      "description": "",
-      "risk": "",
-    }
-  ]
-};
-
-  const [isOpen, setIsOpen] = useState(false);
   const [url, setUrl] = useState("");
+  const [scannedUrl, setScannedUrl] = useState("");
+  const [isUrlFilled, setIsUrlFilled] = useState(true);
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
-  const [scanResults, setScanResults] = useState<typeof mockScanResults | null>(
-    null
-  );
+  const [scanResults, setScanResults] = useState<typeof mockScanResults.reconnaissance | null>(null);
+
   const [expandedSections, setExpandedSections] = useState({
     serverInfo: true,
     openPorts: true,
@@ -118,38 +23,200 @@ function App() {
     ssl: true
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (url.trim() === "") return;
-    setIsModalOpen(true);
-  };
-
-  const handleScan = () => {
-    setIsModalOpen(false);
-    setIsScanning(true);
-
-    fetch('http://127.0.0.1:5000/reconnaissance/'+url)
-      .then(response => {
-        if (!response.ok) {
-          throw new Error('Network response was not ok');
-        }
-        return response.json();
-      })
-      .then(data => {
-        setScanResults({reconnaissance: data, vulnerabilities: []});
-        setIsScanning(false);
-      })
-      .catch(error => {
-        console.error('API call failed:', error);
-        setIsScanning(false);
-      });
-  };
-
   const toggleSection = (section: keyof typeof expandedSections) => {
     setExpandedSections({
       ...expandedSections,
       [section]: !expandedSections[section],
     });
+  };
+
+  const mockScanResults = {
+    reconnaissance: {
+      serverInfo: {
+        ip: "Unknown",
+        OS: "Unknown",
+        webServerType: "Unknown",
+        cms: "Unknown",
+        hostingProvider: "Unknown"
+      },
+      openPorts: [
+        { port: "-", service: "-", status: "-"},
+      ],
+      dnsRecords: [
+        { type: "-", data: "-" },
+      ],
+  
+      subdomains: ["-"],
+  
+      securityHeaders: [
+        { name: "Content-Security-Policy", present: false, risk: "high" },
+        { name: "X-XSS-Protection", present: true, risk: "low" },
+        { name: "X-Frame-Options", present: true, risk: "low" },
+        { name: "Strict-Transport-Security", present: false, risk: "medium" },
+      ],
+  
+      robotsTxt: "",
+  
+      "whois": {
+        "domain": "example.com",
+        "registrar": "NameCheap, Inc.",
+        "creationDate": "2010-06-15",
+        "expiryDate": "2030-06-15",
+        "nameServers": ["ns1.example.com", "ns2.example.com"]
+      },
+      
+      "ssl": {
+        "issuer": "Let's Encrypt Authority X3",
+        "validFrom": "2024-04-10",
+        "validTo": "2024-07-09",
+        "protocol": "TLS 1.3",
+        "keySize": "2048 bits",
+        "status": "Valid"
+      }
+    }
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+  
+    if (url.trim() === "") {
+      setIsUrlFilled(false);
+      return;
+    }
+  
+    if (!isValidUrl(url)) {
+      setIsUrlFilled(false);
+      return;
+    }
+  
+    setIsUrlFilled(true);
+
+    (termsAccepted) ? handleScan() : setIsModalOpen(true);
+  };
+  
+  const isValidUrl = (string:string) => {
+    const pattern = new RegExp('^(https?:\\/\\/)?' + // protocol (optional)
+      '((([a-z\\d]([a-z\\d-]*[a-z\\d])*).)+[a-z]{2,}|' + // domain name
+      '((\\d{1,3}\\.){3}\\d{1,3}))' + // OR IPv4 address
+      '(\\:\\d+)?(\\/[-a-z\\d%_.~+]*)*' + // port and path (optional)
+      '(\\?[;&a-z\\d%_.~+=-]*)?' + // query string (optional)
+      '(\\#[-a-z\\d_]*)?$', 'i'); // fragment locator (optional)
+  
+    return pattern.test(string);
+  };
+  
+
+  const handleScan = async () => {
+    setScannedUrl(url);
+
+    setIsModalOpen(false);
+
+    setScanResults(mockScanResults.reconnaissance);
+    return;
+    setIsScanning(true);
+
+    const backendUrl = import.meta.env.VITE_BACKEND_URL;
+
+    try {
+      const res = await fetch(`${backendUrl}/api/recon`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data ? data.error : `HTTP error! Status: ${res.status}`);
+      }
+
+      setScanResults(data);
+
+      setIsScanning(false);
+    } catch (err: unknown) {
+      setScanResults(null);
+      
+      if (err instanceof Error) {
+        toast.error(err.message);
+      } else {
+        toast.error('An unexpected error occurred.');
+      }
+
+      setIsScanning(false);
+    }
+  };
+
+  const ws = useRef<WebSocket | null>(null);
+  const [xssLogs, setXssLogs] = useState<string[]>([]);
+  const [sqlLogs, setSqlLogs] = useState<string[]>([]);
+  const [isXsstrikeLoading, setIsXsstrikeLoading] = useState<boolean>(false);
+  const [isSqlmapLoading, setIsSqlmapLoading] = useState<boolean>(false);
+
+  useEffect(() => {
+    ws.current = new WebSocket("ws://localhost:8000/ws/ping");
+
+    ws.current.onmessage = (event: MessageEvent) => {
+      const data = event.data as string;
+      if (data.startsWith("xss:")) {
+        setXssLogs((prevLogs) => [...prevLogs, data.replace(/^xss:/, "")]);
+      } else if (data.startsWith("sql:")) {
+        setSqlLogs((prevLogs) => [...prevLogs, data.replace(/^sql:/, "")]);
+      } else {
+        // fallback: append to both logs if not prefixed
+        setXssLogs((prevLogs) => [...prevLogs, data]);
+        setSqlLogs((prevLogs) => [...prevLogs, data]);
+      }
+    };
+
+    ws.current.onclose = () => {
+      setXssLogs((prevLogs) => [...prevLogs, "Connection closed."]);
+      setSqlLogs((prevLogs) => [...prevLogs, "Connection closed."]);
+    };
+
+    ws.current.onerror = () => {
+      setXssLogs((prevLogs) => [...prevLogs, "WebSocket error."]);
+      setSqlLogs((prevLogs) => [...prevLogs, "WebSocket error."]);
+    };
+
+    return () => {
+      ws.current?.close();
+    };
+  }, []);
+
+  const startXss = () => {
+    if (!ws.current || ws.current.readyState !== WebSocket.OPEN) {
+      setXssLogs(["WebSocket not connected."]);
+      return;
+    }
+    setIsXsstrikeLoading(true);
+    setXssLogs([]);
+    ws.current.send(`xss:${url}`);
+    // Stop loading when scan completed message is received
+    const stopLoading = (event: MessageEvent) => {
+      if (event.data.startsWith("xss:XSStrike scan completed.")) {
+        setIsXsstrikeLoading(false);
+        ws.current?.removeEventListener('message', stopLoading);
+      }
+    };
+    ws.current.addEventListener('message', stopLoading);
+  };
+
+  const startSql = () => {
+    if (!ws.current || ws.current.readyState !== WebSocket.OPEN) {
+      setSqlLogs(["WebSocket not connected."]);
+      return;
+    }
+    setIsSqlmapLoading(true);
+    setSqlLogs([]);
+    ws.current.send(`sql:${url}`);
+    // Stop loading when scan completed message is received
+    const stopLoading = (event: MessageEvent) => {
+      if (event.data.startsWith("sql:sqlmap scan completed.")) {
+        setIsSqlmapLoading(false);
+        ws.current?.removeEventListener('message', stopLoading);
+      }
+    };
+    ws.current.addEventListener('message', stopLoading);
   };
 
   return (
@@ -159,7 +226,7 @@ function App() {
           <div className="flex items-center">
             <Shield className="h-8 w-8 text-indigo-600 mr-3" />
             <h1 className="text-2xl font-bold text-gray-900">
-              SecurityScanner
+              SecureScan
             </h1>
           </div>
         </div>
@@ -180,13 +247,12 @@ function App() {
               </label>
               <div className="flex">
                 <input
-                  type="url"
                   id="url"
                   placeholder="https://example.com"
                   value={url}
-                  onChange={(e) => setUrl(e.target.value)}
+                  onChange={(e) => {setUrl(e.target.value); setIsUrlFilled(true);}}
                   className="flex-1 min-w-0 block w-full px-3 py-2 rounded-l-md border border-gray-300 shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                  required
+                  style={{ borderColor: isUrlFilled ? "gray" : "red", borderWidth: isUrlFilled ? "1px" : "2px"}}
                 />
                 <button
                   type="submit"
@@ -204,8 +270,7 @@ function App() {
             <Loader2 className="h-12 w-12 text-indigo-600 animate-spin mb-4" />
             <h2 className="text-xl font-semibold mb-2">Scanning in Progress</h2>
             <p className="text-gray-600 text-center max-w-md">
-              We're analyzing {url} for potential security vulnerabilities. This
-              may take a few moments...
+              We're scanning <b>{url}</b> for active reconnaissance data. This may take a few moments...
             </p>
           </div>
         )}
@@ -215,7 +280,7 @@ function App() {
             <div className="bg-white rounded-lg shadow-lg overflow-hidden">
               <div className="bg-indigo-700 px-6 py-4">
                 <h2 className="text-xl font-bold text-white">
-                  Scan Results for {url}
+                  Scan Results for {scannedUrl}
                 </h2>
               </div>
 
@@ -248,7 +313,7 @@ function App() {
                           <div className="bg-gray-50 p-3 rounded">
                             <p className="text-sm text-gray-500">IP Address</p>
                             <p className="font-medium">
-                              {scanResults.reconnaissance.serverInfo.ip}
+                              {scanResults.serverInfo.ip}
                             </p>
                           </div>
                           <div className="bg-gray-50 p-3 rounded">
@@ -256,14 +321,14 @@ function App() {
                               Operating System
                             </p>
                             <p className="font-medium">
-                              {scanResults.reconnaissance.serverInfo.OS}
+                              {scanResults.serverInfo.OS}
                             </p>
                           </div>
                           <div className="bg-gray-50 p-3 rounded">
                             <p className="text-sm text-gray-500">Web Server</p>
                             <p className="font-medium">
                               {
-                                scanResults.reconnaissance.serverInfo
+                                scanResults.serverInfo
                                   .webServerType
                               }
                             </p>
@@ -271,7 +336,13 @@ function App() {
                           <div className="bg-gray-50 p-3 rounded">
                             <p className="text-sm text-gray-500">CMS</p>
                             <p className="font-medium">
-                              {scanResults.reconnaissance.serverInfo.cms}
+                              {scanResults.serverInfo.cms}
+                            </p>
+                          </div>
+                          <div className="bg-gray-50 p-3 rounded">
+                            <p className="text-sm text-gray-500">Hosting Provider</p>
+                            <p className="font-medium">
+                              {scanResults.serverInfo.hostingProvider}
                             </p>
                           </div>
                         </div>
@@ -316,7 +387,7 @@ function App() {
                               </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
-                              {scanResults.reconnaissance.openPorts.map(
+                              {scanResults.openPorts.map(
                                 (port, index) => (
                                   <tr key={index}>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
@@ -370,7 +441,7 @@ function App() {
                               </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
-                              {scanResults.reconnaissance.dnsRecords.map(
+                              {scanResults.dnsRecords.map(
                                 (record, index) => (
                                   <tr key={index} className="hover:bg-gray-50">
                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
@@ -409,7 +480,7 @@ function App() {
                     {expandedSections.subdomains && (
                       <div className="p-4 border-t">
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                          {scanResults.reconnaissance.subdomains.map(
+                          {scanResults.subdomains.map(
                             (subdomain, index) => (
                               <div
                                 key={index}
@@ -461,7 +532,7 @@ function App() {
                               </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
-                              {scanResults.reconnaissance.securityHeaders.map(
+                              {scanResults.securityHeaders.map(
                                 (header, index) => (
                                   <tr key={index}>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
@@ -521,8 +592,8 @@ function App() {
                     {expandedSections.robotsTxt && (
                       <div className="p-4 border-t bg-gray-50">
                         <pre className="bg-black text-green-400 p-4 rounded-md overflow-x-auto text-sm leading-relaxed font-mono whitespace-pre-wrap">
-                          {scanResults.reconnaissance.robotsTxt?.trim()
-                            ? scanResults.reconnaissance.robotsTxt
+                          {scanResults.robotsTxt?.trim()
+                            ? scanResults.robotsTxt
                             : "No robots.txt found or it is empty."}
                         </pre>
                       </div>
@@ -549,24 +620,24 @@ function App() {
                       <div className="p-4 border-t bg-white text-sm space-y-2">
                         <p>
                           <strong>Domain:</strong>{" "}
-                          {scanResults.reconnaissance.whois.domain || "N/A"}
+                          {scanResults.whois.domain || "N/A"}
                         </p>
                         <p>
                           <strong>Registrar:</strong>{" "}
-                          {scanResults.reconnaissance.whois.registrar || "N/A"}
+                          {scanResults.whois.registrar || "N/A"}
                         </p>
                         <p>
                           <strong>Created:</strong>{" "}
-                          {scanResults.reconnaissance.whois.creationDate ||
+                          {scanResults.whois.creationDate ||
                             "N/A"}
                         </p>
                         <p>
                           <strong>Expires:</strong>{" "}
-                          {scanResults.reconnaissance.whois.expiryDate || "N/A"}
+                          {scanResults.whois.expiryDate || "N/A"}
                         </p>
                         <p>
                           <strong>Name Servers:</strong>{" "}
-                          {scanResults.reconnaissance.whois.nameServers?.join(
+                          {scanResults.whois.nameServers?.join(
                             ", "
                           ) || "N/A"}
                         </p>
@@ -597,30 +668,64 @@ function App() {
                       <div className="p-4 border-t bg-white text-sm space-y-2">
                         <p>
                           <strong>Issuer:</strong>{" "}
-                          {scanResults.reconnaissance.ssl.issuer || "N/A"}
+                          {scanResults.ssl.issuer || "N/A"}
                         </p>
                         <p>
                           <strong>Valid From:</strong>{" "}
-                          {scanResults.reconnaissance.ssl.validFrom || "N/A"}
+                          {scanResults.ssl.validFrom || "N/A"}
                         </p>
                         <p>
                           <strong>Valid To:</strong>{" "}
-                          {scanResults.reconnaissance.ssl.validTo || "N/A"}
+                          {scanResults.ssl.validTo || "N/A"}
                         </p>
                         <p>
                           <strong>Protocol:</strong>{" "}
-                          {scanResults.reconnaissance.ssl.protocol || "N/A"}
+                          {scanResults.ssl.protocol || "N/A"}
                         </p>
                         <p>
                           <strong>Key Size:</strong>{" "}
-                          {scanResults.reconnaissance.ssl.keySize || "N/A"}
+                          {scanResults.ssl.keySize || "N/A"}
                         </p>
                         <p>
                           <strong>Certificate Status:</strong>{" "}
-                          {scanResults.reconnaissance.ssl.status || "N/A"}
+                          {scanResults.ssl.status || "N/A"}
                         </p>
                       </div>
                     )}
+                  </div>
+                </div>
+                <div className="mt-8">
+                  <h3 className="text-lg font-semibold mb-4 flex items-center">
+                    <span className="mr-2">XSS Vulnerability Scan</span>
+                  </h3>
+                  <button
+                    className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:bg-indigo-300 disabled:cursor-not-allowed mb-4"
+                    onClick={startXss}
+                    disabled={isXsstrikeLoading}
+                  >
+                    {isXsstrikeLoading ? 'Scanning with XSStrike...' : 'Run XSStrike XSS Scan'}
+                  </button>
+                  <div className="bg-gray-100 p-4 rounded shadow h-96 overflow-auto">
+                    {xssLogs.map((log, index) => (
+                      <div key={index} className="text-sm">{log}</div>
+                    ))}
+                  </div>
+                </div>
+                <div className="mt-8">
+                  <h3 className="text-lg font-semibold mb-4 flex items-center">
+                    <span className="mr-2">SQL Injection Vulnerability Scan</span>
+                  </h3>
+                  <button
+                    className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:bg-indigo-300 disabled:cursor-not-allowed mb-4"
+                    onClick={startSql}
+                    disabled={isSqlmapLoading}
+                  >
+                    {isSqlmapLoading ? 'Scanning with sqlmap...' : 'Run SQL Injection Scan'}
+                  </button>
+                  <div className="bg-gray-100 p-4 rounded shadow h-96 overflow-auto">
+                    {sqlLogs.map((log, index) => (
+                      <div key={index} className="text-sm">{log}</div>
+                    ))}
                   </div>
                 </div>
               </div>
@@ -658,9 +763,6 @@ function App() {
                   <li>
                     You will not use this tool for malicious purposes or to
                     exploit vulnerabilities discovered.
-                  </li>
-                  <li>
-                    Scan data may be stored for service improvement purposes.
                   </li>
                 </ol>
               </div>
@@ -706,7 +808,7 @@ function App() {
       <footer className="bg-white border-t mt-12">
         <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
           <p className="text-sm text-gray-500 text-center">
-            SecurityScanner &copy; 2025. All rights reserved.
+            SecureScan &copy; 2025. All rights reserved.
           </p>
         </div>
       </footer>

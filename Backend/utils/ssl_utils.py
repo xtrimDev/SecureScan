@@ -9,15 +9,25 @@ def fetch_ssl_certificate(host):
             with context.wrap_socket(sock, server_hostname=host) as ssock:
                 cert = ssock.getpeercert()
                 
+                issuer = dict(x[0] for x in cert['issuer']).get('organizationName', 'Unknown')
+                valid_from = datetime.strptime(cert['notBefore'], '%b %d %H:%M:%S %Y %Z')
+                valid_to = datetime.strptime(cert['notAfter'], '%b %d %H:%M:%S %Y %Z')
+                protocol = ssock.version()
+                
+                # Check if the certificate is currently valid
+                now = datetime.utcnow()
+                status = "Valid" if valid_from <= now <= valid_to else "Expired"
+                
                 return {
-                    "issuer": dict(x[0] for x in cert['issuer']).get('organizationName', 'Unknown'),
-                    "validFrom": datetime.strptime(cert['notBefore'], '%b %d %H:%M:%S %Y %Z').strftime('%Y-%m-%d'),
-                    "validTo": datetime.strptime(cert['notAfter'], '%b %d %H:%M:%S %Y %Z').strftime('%Y-%m-%d'),
-                    "protocol": ssock.version(),
-                    "keySize": "2048 bits",
-                    "status": "Valid"
+                    "issuer": issuer,
+                    "validFrom": valid_from.strftime('%Y-%m-%d'),
+                    "validTo": valid_to.strftime('%Y-%m-%d'),
+                    "protocol": protocol,
+                    "keySize": "Unknown", 
+                    "status": status
                 }
-    except:
+    except Exception as e:
+        print(f"Error fetching certificate: {e}")
         return {
             "issuer": "Unknown",
             "validFrom": None,

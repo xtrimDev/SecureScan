@@ -1,37 +1,38 @@
-from .output import print_info, print_error
-import os
-
 def analyze_security_headers(headers):
+    # Make headers case-insensitive
+    headers = {k.lower(): v for k, v in headers.items()}
+
     security_headers = [
         {
             "name": "Content-Security-Policy",
-            "present": "Content-Security-Policy" in headers,
+            "present": "content-security-policy" in headers,
             "risk": "high"
         },
         {
             "name": "X-XSS-Protection",
-            "present": "X-XSS-Protection" in headers,
+            "present": "x-xss-protection" in headers,
             "risk": "low"
         },
         {
             "name": "X-Frame-Options",
-            "present": "X-Frame-Options" in headers,
+            "present": "x-frame-options" in headers,
             "risk": "low"
         },
         {
             "name": "Strict-Transport-Security",
-            "present": "Strict-Transport-Security" in headers,
+            "present": "strict-transport-security" in headers,
             "risk": "medium"
         },
         {
             "name": "X-Content-Type-Options",
-            "present": "X-Content-Type-Options" in headers,
+            "present": "x-content-type-options" in headers,
             "risk": "low"
         },
         {
             "name": "Referrer-Policy",
-            "present": "Referrer-Policy" in headers,
+            "present": "referrer-policy" in headers,
             "risk": "low"
         }
     ]
+
     return security_headers

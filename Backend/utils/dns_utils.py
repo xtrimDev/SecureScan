@@ -1,6 +1,5 @@
 import dns.resolver
 import socket
-from .output import print_info, print_data, print_error, print_header, print_json
 
 def get_records(host):
     records = []
