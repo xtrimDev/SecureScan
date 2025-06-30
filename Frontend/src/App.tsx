@@ -162,7 +162,7 @@ function App() {
 
   useEffect(() => {
     const socketUrl = import.meta.env.VITE_SOCKET_URL;
-    console.log(socketUrl);
+    // console.log(socketUrl);
 
     ws.current = new WebSocket(`${socketUrl}/ws/ping`);
 
